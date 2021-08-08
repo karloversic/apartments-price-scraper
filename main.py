@@ -73,8 +73,12 @@ def print_result(names, prices, max_name_len, max_price_len):
 
 
 def filter_result(names, prices):
-    with open('apartments_list.txt', 'r') as file:
-        filter_list = set(file.read().splitlines())
+    # noinspection PyBroadException
+    try:
+        with open('apartments_list.txt', 'r') as file:
+            filter_list = set(file.read().splitlines())
+    except Exception:
+        return names, prices
 
     names_filtered = []
     prices_filtered = []

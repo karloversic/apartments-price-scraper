@@ -1,5 +1,6 @@
 import codecs
 import logging
+
 from selenium import webdriver
 
 logging.basicConfig()
@@ -71,6 +72,20 @@ def print_result(names, prices, max_name_len, max_price_len):
     file.close()
 
 
+def filter_result(names, prices):
+    with open('apartments_list.txt', 'r') as file:
+        filter_list = set(file.read().splitlines())
+
+    names_filtered = []
+    prices_filtered = []
+    for name, price in zip(names, prices):
+        for item in filter_list:
+            if name == item:
+                names_filtered.append(name)
+                prices_filtered.append(price)
+    return names_filtered, prices_filtered
+
+
 def main():
     # Open booking.com in chromium
     driver = webdriver.Chrome()
@@ -87,26 +102,28 @@ def main():
     prices_unparsed.append(get_prices(driver))
 
     # Find how many pages exists
-    res_info = ""
+    res_found = 0
     # noinspection PyBroadException
     try:
-        res_info = driver.find_element_by_class_name("results-meta")
+        # (Rijeka: 14 properties found).text.split(' ')[1] = 14
+        res_found = int(driver.find_element_by_class_name("sr_header").text.split(' ')[1])
+
     except Exception:
         pass
 
     # Go through pages
-    if res_info != "":
-        res_sum = int(res_info.text.split(' ')[1])
-
+    res_per_page = 25
+    if res_found == '':
+        pass
+    elif res_found > res_per_page:
         # First page url
         url = driver.current_url
 
-        res_per_page = 25
         offset = res_per_page
 
         # Iterate through pages while there are no more listings
-        while res_sum > 0:
-            res_sum -= res_per_page
+        while res_found > 0:
+            res_found -= res_per_page
 
             # Go to next page using offset
             driver.get(url + '&offset=' + str(offset))
@@ -125,6 +142,12 @@ def main():
     max_price_len = prices_parsed[1]
     prices_parsed = prices_parsed[0]
 
+    # Filter only wanted apartments
+    result = filter_result(names_parsed, prices_parsed)
+    names_parsed = result[0]
+    prices_parsed = result[1]
+
+    # Print to prices.txt
     print_result(names_parsed, prices_parsed, max_name_len, max_price_len)
 
     driver.quit()

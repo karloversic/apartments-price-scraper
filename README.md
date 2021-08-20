@@ -1,6 +1,10 @@
 # Apartments price scraper
 Scrapes "www.booking.com" for prices of (specific) apartments, and saves the data in `prices.txt` in table.
 
+### Usage
+After starting browser, date input is required in format `DD.MM`
+
+
 ### Requirements
 For scraper to  work, [chromedriver](https://chromedriver.chromium.org/) is required.
 

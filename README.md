@@ -6,7 +6,7 @@ For scraper to  work, [chromedriver](https://chromedriver.chromium.org/) is requ
 
 
 ### Specify apartments (optional)
-To specify which apartments to look for, create `apartments_list.txt`, and paste apartments name into it, separated by newline, e.g.:
+To specify which apartments to look for, create `filter.txt`, and paste apartments name into it, separated by newline, e.g.:
 
     Apartment Eclipse
     Residence apartments

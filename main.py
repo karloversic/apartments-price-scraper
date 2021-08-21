@@ -1,29 +1,12 @@
 import codecs
 import logging
-
+import sys
+from math import ceil
+from operator import attrgetter
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
 logging.basicConfig()
-
-
-# Date entry
-def date_input(months):
-    date = input("Please enter desired date (DD.MM): ").split('.')
-
-    # ValiDATE
-    if int(date[1]) > 12 or int(date[1]) < 1:
-        print("Entered month invalid.")
-        date_input(months)
-        return date
-    elif int(date[0]) > months[int(date[1]) - 1] or int(date[0]) < 1:
-        print("Entered date invalid.")
-        date_input(months)
-        return date
-    return date
 
 
 # Convert Selenium webelement to string
@@ -79,6 +62,7 @@ def get_date(driver):
     # Find desired date on calendar
     blanks = -1
     for entry in cal_entries:
+        # Skip empty cells, and skip current month if next one is desired
         if entry == '' or blanks < additional_days:
             blanks += 1
             continue
@@ -86,7 +70,6 @@ def get_date(driver):
             # driver.find_elements_by_class_name('bui-calendar__date')[int(date[0])].click()
             driver.find_elements_by_class_name('bui-calendar__date')[int(date[0]) + blanks].click()
             break
-
     return
 
 
@@ -104,6 +87,7 @@ def search(driver):
     # Set currency to EUR
     driver.get(driver.current_url + ';selected_currency=EUR')
 
+
 # Convert 2D list to 1D list
 def parse(list_unparsed):
     max_len = -1
@@ -119,57 +103,74 @@ def parse(list_unparsed):
 
 
 # Adjust length to max_len
-def adjust_length(name, max_len):
-    if len(name) < max_len:
-        name = (name + " " * max_len)[:max_len]
-    return name
+def adjust_length(item, max_len):
+    if len(item) < max_len:
+        item = (item + " " * max_len)[:max_len]
+    return item
 
 
 # Print results in table in prices.txt file
-def fprint_result(names, prices, max_name_len, max_price_len):
+def fprint_result(apartments, name_len, price_len):
     file = codecs.open("prices.txt", 'w+', 'utf-8')
 
     num_of_hashs = 15
-    if not names:
-        num_of_hashs = 30
+    if not apartments:
+        num_of_hashs = 31
 
-    file.write("#" * (max_name_len + max_price_len + num_of_hashs) + "\r\n")
-    file.write("#   " + adjust_length("Apartmani", max_name_len) + "   #   " + adjust_length("Cijene",
-                                                                                             max_price_len) + "   #\r\n")
-    file.write("#" * (max_name_len + max_price_len + num_of_hashs) + "\r\n")
-    if names:
-        for name, price in zip(names, prices):
-            file.write("#   " + adjust_length(name, max_name_len) + "   #   " + adjust_length(price,
-                                                                                              max_price_len) + "   #\r\n")
+    file.write("#" * (name_len + price_len + num_of_hashs) + "\r\n")
+    file.write("#   " + adjust_length("Apartmani", name_len) + "   #   " + adjust_length("Cijene",
+                                                                                         price_len) + "  #\r\n")
+    file.write("#" * (name_len + price_len + num_of_hashs) + "\r\n")
+    if apartments:
+        for apartment in apartments:
+            file.write("#   " + adjust_length(apartment.name, name_len) + "   #   " + apartment.currency + " " + adjust_length(str(apartment.price),
+                                                                                                                               price_len) + " #\r\n")
     else:
-        file.write("#     No apartments found    #\r\n")
-    file.write("#" * (max_name_len + max_price_len + num_of_hashs))
+        file.write("#    No apartments found    #\r\n")
+    file.write("#" * (name_len + price_len + num_of_hashs))
 
     file.close()
+    print("Results printed.")
     return
 
 
-def filter_result(names, prices):
+def sort_and_filter(apartments):
+    # Sort by price
+    apartments = sorted(apartments, key=attrgetter('price'), reverse=True)
+    print("Apartments sorted.")
+
     # noinspection PyBroadException
     try:
         with open('filter.txt', 'r') as file:
             filter_list = set(file.read().splitlines())
     except Exception:
-        return names, prices
+        print("File filter.txt. not found, no filter applied.")
+        return apartments
 
     if not filter_list:
-        print("No filter set in filter.txt., ignoring filter.txt.")
-        return names, prices
+        print("No filter set in filter.txt., no filter applied.")
+        return apartments
 
-    print("Filter applied.")
-    names_filtered = []
-    prices_filtered = []
-    for name, price in zip(names, prices):
+    apartments_filtered = []
+    for apartment in apartments:
         for item in filter_list:
-            if name == item:
-                names_filtered.append(name)
-                prices_filtered.append(price)
-    return names_filtered, prices_filtered
+            if apartment.name == item:
+                apartments_filtered.append(apartment)
+    print("Apartments filtered.")
+    return apartments_filtered
+
+
+class MaxLength:
+    def __init__(self, name, price):
+        self.name = name
+        self.price = price
+
+
+class Apartment:
+    def __init__(self, name, currency, price):
+        self.name = name
+        self.currency = currency
+        self.price = int(price)
 
 
 def main():
@@ -190,7 +191,20 @@ def main():
     print("Setting up search...")
     search(driver)
 
+    # Find how many pages exists
+    res_found = 0
+    # noinspection PyBroadException
+    try:
+        # (Rijeka: 14 properties found).text.split(' ')[1] = 14
+        res_found = int(driver.find_element_by_class_name("sr_header").text.split(' ')[1])
+        print("Results found: " + str(res_found) + " (" + str(ceil(res_found / 25)) + " pages)")
+    except Exception:
+        pass
+
     print("Getting apartments names and prices...")
+    print("Going through page(s)...")
+    if res_found != 0:
+        print(" ... page 1/" + str(ceil(res_found / 25)))
 
     names_unparsed = []
     prices_unparsed = []
@@ -198,69 +212,64 @@ def main():
     names_unparsed.append(webelement_to_text(driver.find_elements_by_class_name("sr-hotel__name")))
     prices_unparsed.append(webelement_to_text(driver.find_elements_by_class_name("bui-price-display__value")))
 
-    # Find how many pages exists
-    res_found = 0
-    # noinspection PyBroadException
-    try:
-        # (Rijeka: 14 properties found).text.split(' ')[1] = 14
-        res_found = int(driver.find_element_by_class_name("sr_header").text.split(' ')[1])
-    except Exception:
-        pass
-
     # Go through pages
     res_per_page = 25
     if res_found == '':
         pass
     elif res_found > res_per_page:
-        print("Going through pages...")
         # First page url
         url = driver.current_url
 
-        offset = res_per_page
-
         # Iterate through pages while there are no more listings
-        while res_found > 0:
-            res_found -= res_per_page
+        offset = res_per_page
+        res_left = res_found
+        page = 2
+        while res_left > 0:
+            res_left -= res_per_page
 
             # Go to next page using offset
             driver.get(url + '&offset=' + str(offset))
+            if page <= ceil(res_found / 25):
+                print(" ... page " + str(page) + "/" + str(ceil(res_found / 25)))
 
             names_unparsed.append(webelement_to_text(driver.find_elements_by_class_name("sr-hotel__name")))
             prices_unparsed.append(webelement_to_text(driver.find_elements_by_class_name("bui-price-display__value")))
 
             offset += 25
+            page += 1
 
-    # Separate items form item_max_len
+    # Separate items form item max length
     names_parsed = parse(names_unparsed)
-    max_name_len = names_parsed[1]
-    names_parsed = names_parsed[0]
-
     prices_parsed = parse(prices_unparsed)
-    max_price_len = prices_parsed[1]
+
+    length = MaxLength(names_parsed[1], prices_parsed[1])
+
+    names_parsed = names_parsed[0]
     prices_parsed = prices_parsed[0]
 
-    # Filter only wanted apartments
-    print("Filtering apartments...")
-    result = filter_result(names_parsed, prices_parsed)
+    apartments = []
+    for name, price in zip(names_parsed, prices_parsed):
+        # Split price into currency and value and store them together with name in apartments_object
+        cur = price.split(' ')[0]
+        tmp_price = price.split(' ')[1]
+        apartments.append(Apartment(name, cur, int(tmp_price)))
+
+    print("Sorting and filtering apartments...")
+    apartments_saf = sort_and_filter(apartments)
 
     # If filter applied, adjust max item length for prices.txt table dimensions
-    if len(names_parsed) > len(result[0]):
+    if sys.getsizeof(apartments) > sys.getsizeof(apartments_saf):
         max_name_len = 0
         max_price_len = 0
-        for name, price in zip(result[0], result[1]):
-            if len(name) > max_name_len:
-                max_name_len = len(name)
-            if len(price) > max_price_len:
-                max_price_len = len(price)
-
-    # Separate names from prices
-    names_parsed = result[0]
-    prices_parsed = result[1]
+        for apartment in apartments_saf:
+            if len(apartment.name) > max_name_len:
+                max_name_len = len(apartment.name)
+            if len(str(apartment.price)) > max_price_len:
+                max_price_len = len(str(apartment.price))
 
     # Print to prices.txt
     print("Printing results to prices.txt...")
-    fprint_result(names_parsed, prices_parsed, max_name_len, max_price_len)
-    print("Results printed.")
+    fprint_result(apartments_saf, length.name, length.price)
 
     print("Closing Chromium...")
     driver.quit()

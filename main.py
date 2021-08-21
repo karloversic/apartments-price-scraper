@@ -3,6 +3,9 @@ import logging
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 logging.basicConfig()
 
@@ -98,7 +101,8 @@ def search(driver):
     # Search button
     print("Search submitted.")
     driver.find_element_by_class_name('-submit-button').click()
-
+    # Set currency to EUR
+    driver.get(driver.current_url + ';selected_currency=EUR')
 
 # Convert 2D list to 1D list
 def parse(list_unparsed):

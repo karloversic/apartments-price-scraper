@@ -19,6 +19,6 @@ To specify which apartments to look for, create `filter.txt`, and paste apartmen
 
 
 ## Notes
-Both `chromedriver.exe` and `apartments_list.txt` has to be in root folder (`apartments-price-scraper/`) in order to work.
+Both `chromedriver.exe` and `filter.txt` has to be in root folder (`apartments-price-scraper/`) in order to work.
 
 

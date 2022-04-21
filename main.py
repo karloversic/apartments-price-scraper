@@ -1,10 +1,15 @@
 import codecs
 import logging
+import re
 import sys
 from math import ceil
 from operator import attrgetter
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 logging.basicConfig()
 
@@ -22,68 +27,88 @@ def get_date(driver):
     months = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
     # Get "today", today's year, and today's month
-    today = driver.find_element_by_class_name('bui-calendar__date--today').get_attribute("data-date").split("-")
+    today = WebDriverWait(driver, 20).until(
+        EC.presence_of_element_located((By.CLASS_NAME, 'bui-calendar__date--today'))).get_attribute('data-date').split(
+        "-")
     today_year = int(today[0])
     today_month = int(today[1])
+    today_day = int(today[2])
 
     # Check for leap year
     if today_year % 4 == 0:
         months[1] = 29
 
-    date = input("Please enter desired date (DD.MM): ").split('.')
+    def str_to_char(word):
+        return [char for char in word]
 
-    # ValiDATE
-    success = 0
-    while success != 1:
-        if len(date) == 1:
-            print('Entered day and month invalid or missing dot.')
-            date = input("Please enter desired date (DD.MM): ").split('.')
-            continue
-        elif date[1] == '' or int(date[1]) > 12 or int(date[1]) < 1:
-            print("Entered month invalid.")
-            date = input("Please enter desired date (DD.MM): ").split('.')
-            continue
-        elif date[0] == '' or int(date[0]) > months[int(date[1]) - 1] or int(date[0]) < 1:
-            print("Entered day invalid.")
-            date = input("Please enter desired date (DD.MM): ").split('.')
-            continue
+    def date_input():
+        user_input = input('Please enter desired date (DD.MM): ')
+
+        return user_input
+
+    valid = 0
+    date = date_input()
+    while valid != 1:
+        if len(date) != 5 or not re.search('\d\d.\d\d', date):
+            print('Input invalid, please use (DD.MM) format.')
+            date = date_input()
         else:
-            success = 1
+            day = int(str_to_char(date)[0] + str_to_char(date)[1])
+            month = int(str_to_char(date)[3] + str_to_char(date)[4])
+
+            if month > 12 or month < 1:
+                print('Entered month invalid.')
+                date = date_input()
+            elif day > months[month - 1] or day < 1 or (day < today_day and month == today_month):
+                print('Entered day invalid.')
+                date = date_input()
+            else:
+                valid = 1
 
     # Get all calendar entries that are valid
-    cal_entries = webelement_to_text(driver.find_elements_by_class_name('bui-calendar__date'))
+    driver.find_elements(by=By.CLASS_NAME, value='bui-calendar__date')[4].click()
+    cal_entries = webelement_to_text(driver.find_elements(by=By.CLASS_NAME, value='bui-calendar__date'))
 
     # Check on which calendar pane (1st or 2nd) is desired month
     additional_days = -1
-    if int(date[1]) != today_month:
+    if month != today_month:
         additional_days = 41
 
-    print("Locating desired date's webelement...")
     # Find desired date on calendar
+    print("Locating desired date's webelement...")
     blanks = -1
     for entry in cal_entries:
         # Skip empty cells, and skip current month if next one is desired
         if entry == '' or blanks < additional_days:
             blanks += 1
             continue
-        elif entry == date[0]:
-            # driver.find_elements_by_class_name('bui-calendar__date')[int(date[0])].click()
-            driver.find_elements_by_class_name('bui-calendar__date')[int(date[0]) + blanks].click()
+        elif int(entry) == day:
+            driver.find_elements(by=By.CLASS_NAME, value='bui-calendar__date')[day + blanks].click()
             break
     return
 
 
 # Set up search query
 def search(driver):
-    # City
-    driver.find_element_by_name("ss").send_keys("Rijeka")
-    # Dates table
-    driver.find_element_by_xpath('//*[@id="frm"]/div[1]/div[2]/div[1]/div[2]/div/div/div/div/span').click()
+    # Accept cookies
+    WebDriverWait(driver, 20).until(
+        EC.presence_of_element_located((By.ID, 'onetrust-accept-btn-handler'))).click()
+
+    # Select city
+    WebDriverWait(driver, 20).until(
+        EC.presence_of_element_located((By.NAME, 'ss'))).send_keys('Rijeka')
+
+    # Date table
+    WebDriverWait(driver, 20).until(
+        EC.presence_of_element_located((By.CLASS_NAME, 'xp__dates'))).click()
+
     # Date
     get_date(driver)
+
     # Search button
-    print("Search submitted.")
-    driver.find_element_by_class_name('-submit-button').click()
+    print('Search submitted.')
+    driver.find_element(by=By.CLASS_NAME, value='-submit-button').click()
+
     # Set currency to EUR
     driver.get(driver.current_url + ';selected_currency=EUR')
 
@@ -111,26 +136,28 @@ def adjust_length(item, max_len):
 
 # Print results in table in prices.txt file
 def fprint_result(apartments, name_len, price_len):
-    file = codecs.open("prices.txt", 'w+', 'utf-8')
+    file = codecs.open('prices.txt', 'w+', 'utf-8')
 
     num_of_hashs = 15
     if not apartments:
         num_of_hashs = 31
 
-    file.write("#" * (name_len + price_len + num_of_hashs) + "\r\n")
-    file.write("#   " + adjust_length("Apartmani", name_len) + "   #   " + adjust_length("Cijene",
+    file.write('#' * (name_len + price_len + num_of_hashs) + "\r\n")
+    file.write('#   ' + adjust_length('Apartmani', name_len) + '   #   ' + adjust_length('Cijene',
                                                                                          price_len) + "  #\r\n")
     file.write("#" * (name_len + price_len + num_of_hashs) + "\r\n")
     if apartments:
         for apartment in apartments:
-            file.write("#   " + adjust_length(apartment.name, name_len) + "   #   " + apartment.currency + " " + adjust_length(str(apartment.price),
-                                                                                                                               price_len) + " #\r\n")
+            file.write(
+                '#   ' + adjust_length(apartment.name, name_len) + '   #   ' + apartment.currency + " " + adjust_length(
+                    str(apartment.price),
+                    price_len) + ' #\r\n')
     else:
-        file.write("#    No apartments found    #\r\n")
-    file.write("#" * (name_len + price_len + num_of_hashs))
+        file.write('#    No apartments found    #\r\n')
+    file.write('#' * (name_len + price_len + num_of_hashs))
 
     file.close()
-    print("Results printed.")
+    print('Results printed.')
     return
 
 
@@ -174,8 +201,8 @@ class Apartment:
 
 
 def main():
-    print("Opening Chromium...")
     # Open booking.com in headless Chromium
+    print("Opening booking.com...")
     options = Options()
     options.add_argument('headless')
     options.add_argument('disable-gpu')
@@ -196,9 +223,10 @@ def main():
     # noinspection PyBroadException
     try:
         # (Rijeka: 14 properties found).text.split(' ')[1] = 14
-        res_found = int(driver.find_element_by_class_name("sr_header").text.split(' ')[1])
+        res_found = int(driver.find_element(by=By.CLASS_NAME, value='e1f827110f').text.split(' ')[1])
         print("Results found: " + str(res_found) + " (" + str(ceil(res_found / 25)) + " pages)")
     except Exception:
+        print("No results found.")
         pass
 
     print("Getting apartments names and prices...")
@@ -209,8 +237,8 @@ def main():
     names_unparsed = []
     prices_unparsed = []
     # Get unparsed names and prices from first page
-    names_unparsed.append(webelement_to_text(driver.find_elements_by_class_name("sr-hotel__name")))
-    prices_unparsed.append(webelement_to_text(driver.find_elements_by_class_name("bui-price-display__value")))
+    names_unparsed.append(webelement_to_text(driver.find_elements(by=By.CLASS_NAME, value='a23c043802')))
+    prices_unparsed.append(webelement_to_text(driver.find_elements(by=By.CLASS_NAME, value='bd73d13072')))
 
     # Go through pages
     res_per_page = 25
@@ -232,8 +260,9 @@ def main():
             if page <= ceil(res_found / 25):
                 print(" ... page " + str(page) + "/" + str(ceil(res_found / 25)))
 
-            names_unparsed.append(webelement_to_text(driver.find_elements_by_class_name("sr-hotel__name")))
-            prices_unparsed.append(webelement_to_text(driver.find_elements_by_class_name("bui-price-display__value")))
+            names_unparsed.append(webelement_to_text(driver.find_elements(by=By.CLASS_NAME, value='a23c043802')))
+            prices_unparsed.append(
+                webelement_to_text(driver.find_elements(by=By.CLASS_NAME, value='bd73d13072')))
 
             offset += 25
             page += 1

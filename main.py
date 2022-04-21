@@ -46,6 +46,7 @@ def get_date(driver):
 
         return user_input
 
+    # ValiDATE
     valid = 0
     date = date_input()
     while valid != 1:
